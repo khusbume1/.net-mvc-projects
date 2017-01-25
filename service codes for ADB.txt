@@ -73,7 +73,7 @@ namespace BLL.Sevices
             catch (Exception ex)
             {
                 throw ex;
-                //return null;
+               
             }
             finally
             {
@@ -97,19 +97,8 @@ namespace BLL.Sevices
                         {
                             if (LstColumns[i].DestinationName != null)
                             {
-                                //if (LstColumns[i].DestinationName.Distinct().Count() >= 2)
-                                //{
-                                //    return ;
-                                //}
-                                //var counts = LstColumns[i].DestinationName.Distinct().Count();
-                                //if (counts >= 2)
-                                //{
-                                //    return 
-                                //}
-
                                 SqlBulkCopyColumnMapping map =
                                 new SqlBulkCopyColumnMapping("[" + LstColumns[i].SourceName + "]", LstColumns[i].DestinationName);
-                                // new SqlBulkCopyColumnMapping( LstColumns[i].SourceName  , LstColumns[i].DestinationName);
                                 bulkCopy.ColumnMappings.Add(map);
                             }
                         }
@@ -172,23 +161,6 @@ namespace BLL.Sevices
             }
         }
 
-        //public List<> ColumnMapping(DataTable dtable)
-        //{
-        //    try
-        //    {
-        //        List<string> clname = new List<string>();
-        //        for (int i = 0; i < dtable.Columns.Count; i++)
-        //        {
-        //            clname.Add(dtable.Columns[i].ColumnName);
-
-        //        }
-
-        //        using(_context = new Exo_ADBEntities())
-        //        {
-        //            var dbcolumn = _context.ProjectColumns.AsEnumerable().
-        //        }
-
-        //}
         public List<SelectListItem> SelectedColumnCategory()
         {
             using (_context = new Exo_ADBEntities())
