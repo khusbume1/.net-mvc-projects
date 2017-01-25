@@ -1,0 +1,1389 @@
+using BLL.Interface;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using NewADB.DAL;
+using System.Data;
+using System.Data.OleDb;
+using System.Data.SqlClient;
+using System.Web.Mvc;
+using NewADB.Model;
+
+namespace BLL.Sevices
+{
+    public class NewADBService : INewADBService
+    {
+       
+        private Exo_ADBEntities _context = null;
+        public DataTable ReadFromExcel(string filePath)
+        {
+            System.Data.OleDb.OleDbConnection conn1 = null;
+            try
+            {
+                string connection = "";
+                if (filePath.Substring(filePath.LastIndexOf('.')).Trim().ToLower() == ".xls")
+                {
+                    connection = "Provider=Microsoft.Jet.OLEDB.4.0;" +
+                   "Data Source=" + filePath + ";" +
+                   "Extended Properties=\"Excel 8.0;HDR=YES\"";
+                }
+                else
+                {
+                    connection = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=" + filePath + ";Extended Properties=\"Excel 12.0;HDR=YES\"";
+                }
+                conn1 = new System.Data.OleDb.OleDbConnection(connection);
+                conn1.Open();
+                //string query = String.Format("SELECT * FROM [{0}", fileName + "]");
+                DataTable dtSheetName = conn1.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null);
+                //System.Data.OleDb.OleDbCommand cmd = new System.Data.OleDb.OleDbCommand("Select * From [projects_export$]", conn1);
+                var tableName =dtSheetName.Rows[0]["TABLE_NAME"].ToString();// dtSheetName.Columns["TABLE_NAME"][0];
+                System.Data.OleDb.OleDbCommand cmd = new System.Data.OleDb.OleDbCommand("Select * From [" + tableName +"]", conn1);
+                System.Data.OleDb.OleDbDataAdapter da = new System.Data.OleDb.OleDbDataAdapter(cmd);
+               // var dtSheetName = conn1.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null);
+               // var sheetName = dtSheetName.TABLE_NAME;
+                var dtExcelData = new DataTable();
+                da.Fill(dtExcelData);
+
+                //var tablesNames = excelConnection.GetOleDbSchemaTable(OleDbSchemaGuid.Tables, null);
+                //var strSql = "SELECT * FROM [" + tableName + "$]";
+
+                
+                string str = "select * from [ExcelSheetData]";
+               
+                string selectcommand = str; //"select [ProjectName] ,[ProjectOfficer] ,[ExecutingAgency] from [ExcelSheetData]";
+
+                //// Bulk Copy to SQL Server
+
+                //using (SqlBulkCopy bulkCopy = new SqlBulkCopy(sqlConnectionString))
+                //{
+                //    for (int i = 0; i < lst.Count; i++)
+                //    {
+                //        SqlBulkCopyColumnMapping map =
+                //        new SqlBulkCopyColumnMapping(lst[i].SourceName, lst[i].DestinationName);
+                //        bulkCopy.ColumnMappings.Add(map);                        
+
+                //    }
+                //    bulkCopy.DestinationTableName = "ExcelSheetData";
+                //    bulkCopy.WriteToServer(dtExcelData);
+                //}
+                return dtExcelData;
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+                //return null;
+            }
+            finally
+            {
+                conn1.Close();
+            }
+        }
+
+        public DataTable CopyMappedFileToDatabase(string filePath, List<ProjectColumnsModel> LstColumns)
+        {
+
+            try
+            {
+                _context = new Exo_ADBEntities();
+                
+                    var dtExcelData = ReadFromExcel(filePath);
+                    string sqlConnectionString = _context.Database.Connection.ConnectionString;
+                    using (SqlBulkCopy bulkCopy = new SqlBulkCopy(sqlConnectionString))
+                    {
+                        //ProjectModel model = new ProjectModel();
+                        for (int i = 0; i < LstColumns.Count; i++)
+                        {
+                            if (LstColumns[i].DestinationName != null)
+                            {
+                                //if (LstColumns[i].DestinationName.Distinct().Count() >= 2)
+                                //{
+                                //    return ;
+                                //}
+                                //var counts = LstColumns[i].DestinationName.Distinct().Count();
+                                //if (counts >= 2)
+                                //{
+                                //    return 
+                                //}
+
+                                SqlBulkCopyColumnMapping map =
+                                new SqlBulkCopyColumnMapping("[" + LstColumns[i].SourceName + "]", LstColumns[i].DestinationName);
+                                // new SqlBulkCopyColumnMapping( LstColumns[i].SourceName  , LstColumns[i].DestinationName);
+                                bulkCopy.ColumnMappings.Add(map);
+                            }
+                        }
+                        bulkCopy.DestinationTableName = "ExcelSheetData";
+                        bulkCopy.WriteToServer(dtExcelData);
+                        return dtExcelData;
+                    }
+
+                
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+        public ProjectColumnsModel CheckMultipleMapping(List<ProjectColumnsModel> LstColumns)
+        {
+            ProjectColumnsModel model = new ProjectColumnsModel();
+            try
+            {
+                for (int i = 0; i < LstColumns.Count; i++)
+                {
+                    if (LstColumns[i].DestinationName != null)
+                    {
+                        var cnt = LstColumns.Where(m => m.DestinationName == LstColumns[i].DestinationName);
+                        if (cnt.Count() > 1)
+                        {
+                            model.ColumnExists = true;
+                            model.DestinationName = LstColumns[i].DestinationName;
+                            return model;
+                        }                      
+                    }
+                }
+                return model;
+            }
+            catch (Exception)
+            {
+                
+                throw;
+            }
+        }
+        public List<int> GetColumnIndex(DataTable dtable)
+        {
+            try
+            {
+                List<int> columnIndex = new List<int>();
+                DataColumnCollection columns = dtable.Columns;
+                for (int i = 0; i < dtable.Columns.Count; i++)
+                {
+                    columnIndex.Add(dtable.Columns[i].Ordinal);
+                    
+                }
+                return columnIndex;
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+
+        //public List<> ColumnMapping(DataTable dtable)
+        //{
+        //    try
+        //    {
+        //        List<string> clname = new List<string>();
+        //        for (int i = 0; i < dtable.Columns.Count; i++)
+        //        {
+        //            clname.Add(dtable.Columns[i].ColumnName);
+
+        //        }
+
+        //        using(_context = new Exo_ADBEntities())
+        //        {
+        //            var dbcolumn = _context.ProjectColumns.AsEnumerable().
+        //        }
+
+        //}
+        public List<SelectListItem> SelectedColumnCategory()
+        {
+            using (_context = new Exo_ADBEntities())
+            {
+
+                return _context.ProjectColumns.AsEnumerable().Select(a => new SelectListItem
+                {
+                    Text = a.ProjectColumnDisplayName,
+                    Value = a.ProjectColumnName.ToString()
+                }).OrderBy(m=>m.Text).ToList();
+            }
+        }
+
+        public List<SelectListItem> SelectedSectorCategory()
+        {
+            using (_context = new Exo_ADBEntities())
+            {
+
+                return _context.Sectors.AsEnumerable().Select(a => new SelectListItem
+                {
+                    Text = a.SectorName,
+                    Value = a.SectorID.ToString()
+                }).ToList();
+            }
+        }
+
+        public List<SelectListItem> SelectedSubSectorCategory()
+        {
+            using (_context = new Exo_ADBEntities())
+            {
+
+                return _context.SubSectors.AsEnumerable().Select(a => new SelectListItem
+                {
+                    Text = a.SubSectorName,
+                    Value = a.SubSectorID.ToString()
+                }).ToList();
+            }
+        }
+
+        public List<SelectListItem> SelectedStatusCategory()
+        {
+            using (_context = new Exo_ADBEntities())
+            {
+                return _context.Status.AsEnumerable().Select(a => new SelectListItem
+                {
+                    Text = a.StatusName,
+                    Value = a.StatusID.ToString()
+
+                }).ToList();
+            }
+        }
+
+        public List<SelectListItem> SelectedProjectTypeCategory()
+        {
+            using (_context = new Exo_ADBEntities())
+            {
+                return _context.ProjectTypes.AsEnumerable().Select(a => new SelectListItem
+                {
+                    Text = a.ProjectTypeName,
+                    Value = a.ProjectTypeID.ToString()
+                }).ToList();
+            }
+        }
+
+        public List<SelectListItem> SelectThematicClassificationCategory()
+        {
+            using (_context = new Exo_ADBEntities())
+            {
+                return _context.ThematicClassifications.AsEnumerable().Select(a => new SelectListItem
+                {
+                    Text = a.ThematicClassificationName,
+                    Value = a.ThematicClassificationID.ToString()
+                }).ToList();
+            }
+        }
+        public List<SelectListItem> SelectDepartmentCategory()
+        {
+            using (_context = new Exo_ADBEntities())
+            {
+                return _context.Departments.AsEnumerable().Select(a => new SelectListItem
+                {
+                    Text =a.DepartmentName,
+                    Value = a.DepartmentID.ToString()
+                }).ToList();
+            }
+        }
+        public List<SelectListItem> SelectFirmRequired()
+        {
+            using (_context = new Exo_ADBEntities())
+            {
+                return _context.ConfigChoices.AsEnumerable().Select(a => new SelectListItem
+                    {
+                        Text = a.ChoiceCode,
+                        Value = a.ConfigChoiceID.ToString()
+                    }).ToList();
+            }
+        }
+        public List<ProjectsModel> GetSearchProjectDetails(int projectId)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var pjtDetail = _context.Database.SqlQuery<ProjectsModel>("exec dbo.[] @searchString",
+                        new SqlParameter("@searchString", projectId)).ToList();
+                    return pjtDetail;
+                }
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+        public List<SectorsModel> GetSubSectorIdFromSector(int consultantId)
+        {
+            try
+            {
+                using(_context = new Exo_ADBEntities())
+                {
+                    var model = (from s in _context.Sectors
+                                join ccssd1 in _context.ConsultantSubSectorDetails.Where(m => m.ConsultantID == consultantId) on s.SectorID equals ccssd1.SectorID into ccsubDet
+                                from ccssd in ccsubDet.DefaultIfEmpty()
+                                select new SectorsModel()
+                                {
+                                    isSelected=ccssd==null ? false : true,
+                                    SectorID=s.SectorID,
+                                    SectorName=s.SectorName
+                                }).Distinct().ToList();
+
+                    foreach (var item in model)
+                    {
+                        item.SubSectorList = (from s in _context.Sectors.Where(m=>m.SectorID==item.SectorID)
+                                              join ss in _context.SubSectors on s.SectorID equals ss.SectorID
+                                              join ccssd1 in _context.ConsultantSubSectorDetails.Where(m => m.ConsultantID == consultantId) on ss.SubSectorID equals ccssd1.SubSectorID into ccsubDet
+                                              from ccssd in ccsubDet.DefaultIfEmpty()
+                                              select new SubSectorsModel()
+                                              {
+                                                  IsSelected = ccssd == null ? false : true,
+                                                  SectorID=ss.SectorID,
+                                                  SubSectorName = ss.SubSectorName,
+                                                  SubSectorID = ss.SubSectorID,
+                                              }).ToList();
+                    }
+
+                    return model;
+                }
+            }
+            catch (Exception)
+            {
+                
+                throw;
+            }
+        }
+
+        public List<ProjectsModel> GetSubSectorIdAndNameFromSectorID(int sectorId)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var subsector = _context.Database.SqlQuery<ProjectsModel>("exec dbo.[GetSubSectorFromSector] @sectorId",
+                        new SqlParameter("@sectorId",sectorId)).ToList();
+                    return subsector;
+                }
+
+            }
+            catch (Exception)
+            {
+                
+                throw;
+            }
+        }
+        public List<SectorsModel> GetSubSectorIdFromSectorForCompany(int companyId)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var model = (from s in _context.Sectors
+                                 join ccssd1 in _context.CompanySubSectorDetails.Where(m => m.CompanyID == companyId) on s.SectorID equals ccssd1.SectorID into ccsubDet
+                                 from ccssd in ccsubDet.DefaultIfEmpty()
+                                 select new SectorsModel()
+                                 {
+                                     isSelected = ccssd == null ? false : true,
+                                     SectorID = s.SectorID,
+                                     SectorName = s.SectorName
+                                 }).Distinct().ToList();
+
+                    foreach (var item in model)
+                    {
+                        item.SubSectorList = (from s in _context.Sectors.Where(m => m.SectorID == item.SectorID)
+                                              join ss in _context.SubSectors on s.SectorID equals ss.SectorID
+                                              join ccssd1 in _context.CompanySubSectorDetails.Where(m => m.CompanyID == companyId) on ss.SubSectorID equals ccssd1.SubSectorID into ccsubDet
+                                              from ccssd in ccsubDet.DefaultIfEmpty()
+                                              select new SubSectorsModel()
+                                              {
+                                                  IsSelected = ccssd == null ? false : true,
+                                                  SectorID = ss.SectorID,
+                                                  SubSectorName = ss.SubSectorName,
+                                                  SubSectorID = ss.SubSectorID,
+                                              }).ToList();
+                    }
+
+                    return model;
+                }
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+        public List<SectorsModel> GetSelectedSubSectorIdFromSector(int consultantId)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    //var result = _context.Database.SqlQuery<SectorsModel>("exec dbo.[GetSectorAndSubSectorIDAndName] @consultantId",
+                    //    new SqlParameter("@consultantId", consultantId)).ToList();
+
+                    var model = (from s in _context.Sectors
+                                 join ccssd in _context.ConsultantSubSectorDetails.Where(m => m.ConsultantID == consultantId) on s.SectorID equals ccssd.SectorID                                
+                                 select new SectorsModel()
+                                 {
+                                     isSelected = ccssd == null ? false : true,
+                                     SectorID = s.SectorID,
+                                     SectorName = s.SectorName
+                                 }).Distinct().ToList();
+
+                    foreach (var item in model)
+                    {
+                        item.SubSectorList = (from s in _context.Sectors.Where(m => m.SectorID == item.SectorID)
+                                              join ss in _context.SubSectors on s.SectorID equals ss.SectorID
+                                              join ccssd in _context.ConsultantSubSectorDetails.Where(m => m.ConsultantID == consultantId) on ss.SubSectorID equals ccssd.SubSectorID                                             
+                                              select new SubSectorsModel()
+                                              {
+                                                  IsSelected = ccssd == null ? false : true,
+                                                  SectorID = ss.SectorID,
+                                                  SubSectorName = ss.SubSectorName,
+                                                  SubSectorID = ss.SubSectorID,
+                                              }).ToList();
+                    }
+
+                    return model;
+                }
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+        public List<SectorsModel> GetSelectedSubSectorIdFromSectorForCompany(int companyId)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var model = (from s in _context.Sectors
+                                 join ccssd in _context.CompanySubSectorDetails.Where(m => m.CompanyID == companyId) on s.SectorID equals ccssd.SectorID
+                                 select new SectorsModel()
+                                 {
+                                     isSelected = ccssd == null ? false : true,
+                                     SectorID = s.SectorID,
+                                     SectorName = s.SectorName
+                                 }).Distinct().ToList();
+
+                    foreach (var item in model)
+                    {
+                        item.SubSectorList = (from s in _context.Sectors.Where(m => m.SectorID == item.SectorID)
+                                              join ss in _context.SubSectors on s.SectorID equals ss.SectorID
+                                              join ccssd in _context.CompanySubSectorDetails.Where(m => m.CompanyID == companyId) on ss.SubSectorID equals ccssd.SubSectorID
+                                              select new SubSectorsModel()
+                                              {
+                                                  IsSelected = ccssd == null ? false : true,
+                                                  SectorID = ss.SectorID,
+                                                  SubSectorName = ss.SubSectorName,
+                                                  SubSectorID = ss.SubSectorID,
+                                              }).ToList();
+                    }
+
+                    return model;
+                }
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+        public List<string> ExtractHeaderData(DataTable dtable)
+        {
+            try
+            {
+                List<string> headers = new List<string>();
+                //List<string> clname = new List<string>();
+                for (int i = 0; i < dtable.Columns.Count; i++)
+                {
+                    headers.Add(dtable.Columns[i].ColumnName);
+
+                }
+                return headers;
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+
+        public bool InsertExcelColumnsToDB()
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var excelData = _context.Database.SqlQuery<string>("exec dbo.[MasterProcedure]").FirstOrDefault();
+                    
+                    return true;
+                }
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+        public List<ProjectsModel> GetProjectDetailList()
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var projectInfoList = _context.Database.SqlQuery<ProjectsModel>("exec dbo.[GetProjectInfoList]").ToList();
+                    return projectInfoList;
+                }
+            }
+            catch (Exception)
+            {
+                
+                throw;
+            }
+        }
+        public List<ConsultantModel> GetConsultantList()
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    //var projectOfficerList = _context.Database.SqlQuery<ConsultantModel>("exec dbo.[GetConsultantsList]").ToList();
+                    //return projectOfficerList;
+                    var model = (from c in _context.Consultants
+                                 join ccssd1 in _context.ConsultantSubSectorDetails on c.ConsultantID equals ccssd1.ConsultantID into ccsubDet
+                                 from ccssd in ccsubDet.DefaultIfEmpty()
+                                 select new ConsultantModel()
+                                 {
+                                     ConsultantID = c.ConsultantID,
+                                     ConsultantName = c.ConsultantName,
+                                     Education = c.Education,
+                                     Contact = c.Contact,
+                                     YearsOFExperience = c.YearsOfExperience
+                                 }).Distinct().ToList();
+                    foreach (var item in model)
+                    {
+                        item.SectorSubsectorList = (from cssd in _context.ConsultantSubSectorDetails.Where(m => m.ConsultantID == item.ConsultantID)
+                                                    join s in _context.Sectors on cssd.SectorID equals s.SectorID
+                                                   // join sb in _context.SubSectors on s.SectorID equals sb.SectorID
+                                                   join sb in _context.SubSectors on cssd.SubSectorID equals sb.SubSectorID
+                                                    select new ConsultantModel()
+                                                    {
+                                                        SectorName= s.SectorName,
+                                                        SubSectorName = sb.SubSectorName
+                                                    }).Distinct().ToList();
+                    }
+
+                    return model;
+                }
+
+            }
+            catch (Exception)
+            {
+                
+                throw;
+            }
+        }
+
+        public List<CompanyModel> GetCompanyList()
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                               var model = (from c in _context.Companies
+                                 join ccssd1 in _context.CompanySubSectorDetails on c.CompanyID equals ccssd1.CompanyID into ccsubDet
+                                 from ccssd in ccsubDet.DefaultIfEmpty()
+                                 select new CompanyModel()
+                                 {
+                                     CompanyID = c.CompanyID,
+                                     CompanyName = c.CompanyName,
+                                     Address = c.Address,
+                                     Email = c.Email,
+                                     Mobile = c.Mobile,
+                                     Landline = c.Landline
+                                 }).Distinct().ToList();
+                    foreach (var item in model)
+                    {
+                        item.SectorSubsectorList = (from cssd in _context.CompanySubSectorDetails.Where(m => m.CompanyID == item.CompanyID)
+                                                    join s in _context.Sectors on cssd.SectorID equals s.SectorID
+                                                   // join sb in _context.SubSectors on s.SectorID equals sb.SectorID
+                                                   join sb in _context.SubSectors on cssd.SubSectorID equals sb.SubSectorID
+                                                    select new CompanyModel()
+                                                    {
+                                                        SectorName= s.SectorName,
+                                                        SubSectorName = sb.SubSectorName
+                                                    }).Distinct().ToList();
+                    }
+
+                    return model;
+                }
+
+            }
+ 
+               
+            catch (Exception)
+            {
+                
+                throw;
+            }
+        }
+        public List<ProjectsModel> GetProjectDetailsBySectorAndSubSector(int sectorid,int subsectorid)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var projectbysectorandsubsector = _context.Database.SqlQuery<ProjectsModel>("exec dbo.[GetProjectDetailsBySectorAndSubSector] @sectorId,@subSectorId", new SqlParameter("@sectorId", sectorid), new SqlParameter("@subSectorId", subsectorid)).ToList();
+                    return projectbysectorandsubsector;
+                }
+
+            }
+            catch (Exception)
+            {
+                
+                throw;
+            }
+        }
+        public ProjectsModel GetProjectListBySearch(int projectId)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var getdetailprojectlist = _context.Database.SqlQuery<ProjectsModel>("exec dbo.[GetProjectListByID] @ProjectID", new SqlParameter("@ProjectID", projectId)).FirstOrDefault();
+                    return getdetailprojectlist;
+                }
+
+            }
+            catch (Exception)
+            {
+                
+                throw;
+            }
+        }
+        public ConsultantModel GetConsultantDetailListByID(int consultantId)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var getConsultantDetailList = _context.Database.SqlQuery<ConsultantModel>("exec dbo.[GetConsultantsDetailListByID] @consultantId", new SqlParameter("@consultantId", consultantId)).FirstOrDefault();
+                    return getConsultantDetailList;
+                }
+            }
+            catch (Exception)
+            {
+                
+                throw;
+            }
+        }
+        public CompanyModel GetCompanyDetailListByID(int companyId)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var getCompanyDetailList = _context.Database.SqlQuery<CompanyModel>("exec dbo.[GetCompanyDetailListByID] @companyId", new SqlParameter("@companyId", companyId)).FirstOrDefault();
+                    return getCompanyDetailList;
+                }
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+        public List<ProjectsModel> GetConsultantSpecificProjectName(int projectoffId)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var getconsultantprojectnamelist = _context.Database.SqlQuery<ProjectsModel>("exec dbo.[GetProjectListByConsultantID] @ProjectOfficerID", new SqlParameter("@ProjectOfficerID", projectoffId)).ToList();
+                    return getconsultantprojectnamelist;
+                }
+
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+
+        public List<ConsultantModel> GetConsultantDetailList()
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var consultantInfoList = _context.Database.SqlQuery<ConsultantModel>("exec dbo.[GetConsultantsList]").ToList();
+                    return consultantInfoList;
+                }
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+        public List<CompanyModel> GetCompanyDetailList()
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var companyInfoList = _context.Database.SqlQuery<CompanyModel>("exec dbo.[GetCompanyList]").ToList();
+                    return companyInfoList;
+                }
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+        public List<ConsultantModel> ViewConsultant(int sbtId)
+        {
+             try 
+	          {
+                  using (_context = new Exo_ADBEntities())
+                  {
+                      var consultantlist = _context.Database.SqlQuery<ConsultantModel>("exec dbo.[ViewSectorSubSectorRelatedConsultant]@subsectorId", 
+                          new SqlParameter("@subsectorId",sbtId)).ToList();
+                      return consultantlist;
+                  }
+	          }
+	        catch (Exception)
+	        {
+		
+		    throw;
+	        }
+        }
+        public ConsultantModel GetConsultantDetailById(int consultantid)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var officer = _context.Database.SqlQuery<ConsultantModel>("exec dbo.[GetConsultantDetailByID] @ConsultantID",
+                                                                    new SqlParameter("@ConsultantID", consultantid)
+                        ).FirstOrDefault();
+                    return officer;
+                }
+            }
+            catch (Exception)
+            {
+
+                return null;
+            }
+        }
+        public CompanyModel GetCompanyDetailById(int companyid)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    var company = _context.Database.SqlQuery<CompanyModel>("exec dbo.[GetCompanyDetailByID] @CompanyID",
+                                                                    new SqlParameter("@CompanyID", companyid)
+                        ).FirstOrDefault();
+                    return company;
+                }
+            }
+            catch (Exception)
+            {
+
+                return null;
+            }
+        }
+
+        public int SaveProjectDetail(ProjectsModel model,int loginId)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    if (model.ProjectID > 0)
+                    {
+                       
+                        var editProjects = _context.Projects.Where(m => m.ProjectID == model.ProjectID).FirstOrDefault();
+                        if (editProjects != null)
+                        {
+                            editProjects.ProjectNumber = model.ProjectNumber;
+                            editProjects.ProjectName = model.ProjectName;
+                            editProjects.ProjectOfficer = model.ProjectOfficer;
+                            editProjects.ADBFinancing = model.ADBFinancing;
+                            editProjects.ApprovalDate = model.ApprovalDate;
+                            editProjects.ExecutingAgency = model.ExecutingAgency;
+                            editProjects.Financing = model.Financing;
+                            editProjects.ApprovalNumber = model.ApprovalNumber;
+                            editProjects.GeographicalLocation = model.GeographialLocation;
+                            editProjects.SafeGuardEnvironment = model.SafeGuardEnvironment;
+                            editProjects.SafeGuardIndigenousPeople = model.SafeGuardIndigenousPeople;
+                            editProjects.SafeGuardResettlement = model.SafeGuardResettlement;
+                            editProjects.Comment = model.Comment;
+                            editProjects.SectorID = model.SectorID;
+                            editProjects.SubSectorID = model.SubSectorID;
+                            editProjects.StatusID = model.StatusID;
+                            editProjects.ThematicClassificationID = model.ThematicClassificationID;
+                            editProjects.DepartmentID = model.DepartmentID;
+                            editProjects.RelevantWebPage = model.RelevantWebPage;
+                           // editProjects.RelatedDocuments = model.RelatedDocuments;
+                            editProjects.ProjectDocumentDetailID = model.ProjectDocumentDetailID;
+                            editProjects.ModifiedDate = DateTime.Now;
+                            editProjects.ConfigChoice_FirmID = model.ConfigChoice_FirmID;
+                            editProjects.DonorOrClient = model.DonorOrClient;
+                            editProjects.AssignedTo = model.AssignedTo;
+                            editProjects.Contact = model.Contact;
+
+                            _context.Projects.Attach(editProjects);
+                            _context.Entry(editProjects).State = EntityState.Modified;
+                            _context.SaveChanges();
+                        }
+                        var editProjectDocument = _context.ProjectDocumentDetails.Where(m => m.ProjectID == model.ProjectID).FirstOrDefault();
+                        for (int i = 0; i < model.DocumentPathList.Count(); i++)
+                        {
+                            if (editProjectDocument != null)
+                            {
+                                editProjectDocument.ProjectID = model.ProjectID;
+                                editProjectDocument.DocumentPath = model.DocumentPathList[i];
+                                
+
+                                _context.ProjectDocumentDetails.Attach(editProjectDocument);
+                                _context.Entry(editProjectDocument).State = EntityState.Modified;
+                                _context.SaveChanges();
+                            }
+
+                        }
+                    }
+                        else
+                        {
+
+                            var addProjects = new Project()
+                            {
+                                ProjectNumber = model.ProjectNumber,
+                                ProjectName = model.ProjectName,
+                                ProjectTypeID = model.ProjectTypeID,
+                                ADBFinancing = model.ADBFinancing,
+                                ApprovalDate = model.ApprovalDate,
+                                ProjectOfficerID= 32,
+                                ExecutingAgency = model.ExecutingAgency,
+                                ProjectOfficer = model.ProjectOfficer,
+                                Financing = model.Financing,
+                                ApprovalNumber = model.ApprovalNumber,
+                                GeographicalLocation = model.GeographialLocation,
+                                SafeGuardEnvironment = model.SafeGuardEnvironment,
+                                SafeGuardIndigenousPeople = model.SafeGuardIndigenousPeople,
+                                SafeGuardResettlement = model.SafeGuardResettlement,
+                                Comment = model.Comment,
+                                SectorID = model.SectorID,
+                                SubSectorID = model.SubSectorID,
+                                StatusID = model.StatusID,
+                                ThematicClassificationID = model.ThematicClassificationID,
+                                DepartmentID = model.DepartmentID,
+                                CreatedBy=loginId,
+                                CreatedDate = DateTime.Now,
+                                RelevantWebPage = model.RelevantWebPage,
+                                //RelatedDocuments = model.RelatedDocuments,
+                                ProjectDocumentDetailID = model.ProjectDocumentDetailID,
+                                ConfigChoice_FirmID = model.ConfigChoice_FirmID,
+                                DonorOrClient = model.DonorOrClient,
+                                AssignedTo = model.AssignedTo,
+                                Contact = model.Contact
+                            };
+                            _context.Projects.Add(addProjects);
+                            _context.SaveChanges();
+                            model.ProjectID = addProjects.ProjectID;
+
+                        for(int i=0; i<model.DocumentPathList.Count(); i++)
+                                {
+                            var addProjectDocument = new ProjectDocumentDetail()
+                            {
+                                
+                                ProjectID = model.ProjectID,
+                                DocumentPath = model.DocumentPathList[i]
+
+                            };
+                            _context.ProjectDocumentDetails.Add(addProjectDocument);
+                            _context.SaveChanges();
+                        }
+                }
+                                                                 
+                    }
+                
+                return 1;
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+
+        public bool CheckIfStatusExists(ProjectsModel model)
+        {
+            var result = new Status();
+            result = _context.Status.AsEnumerable().FirstOrDefault(m => m.StatusName == model.StatusName);
+            if (result != null) { return true; }
+            else { return false; }
+        }
+
+        public bool CheckIfSectorExists(ProjectsModel model)
+        {
+            var result = new Sector();
+            result = _context.Sectors.AsEnumerable().FirstOrDefault(m => m.SectorName == model.SectorName);
+            if (result != null) { return true; }
+            else { return false; }
+        }
+
+        public bool CheckIfSubSectorExists(ProjectsModel model)
+        {
+            var result = new SubSector();
+            result = _context.SubSectors.AsEnumerable().FirstOrDefault(m => m.SubSectorName == model.SubSectorName);
+            if (result != null) { return true; }
+            else { return false; }
+        }
+        public bool CheckIfProjectTypeExists(ProjectsModel model)
+       {
+           var result = new ProjectType();
+           result = _context.ProjectTypes.AsEnumerable().FirstOrDefault(m => m.ProjectTypeName == model.ProjectTypeName);
+           if (result != null) { return true; }
+           else { return false; }
+       }
+          public ProjectsModel AddProjectType(ProjectsModel model,int loginId)
+          {
+              try
+              {
+                  
+                  using (_context = new Exo_ADBEntities())
+                  {
+                      var editProjectType = _context.ProjectTypes.Where(m => m.ProjectTypeID == model.ProjectTypeID).FirstOrDefault();
+                      if (editProjectType != null)
+                      {
+                          if (CheckIfProjectTypeExists(model))
+                          {
+                              model.ProjectTypeExist = true;
+                              return model;
+                          }
+                          editProjectType.ProjectTypeName = model.ProjectTypeName;
+                          editProjectType.ModifiedBy = loginId;
+                          editProjectType.ModifiedDate = DateTime.Now;
+
+                          _context.ProjectTypes.Attach(editProjectType);
+                          _context.Entry(editProjectType).State = EntityState.Modified;
+                          _context.SaveChanges();
+                      }
+                     
+                      else
+                      {
+                          var addProjectType = new ProjectType()
+                          {
+                              ProjectTypeName = model.ProjectTypeName,
+                              CreatedBy = loginId,
+                              CreatedDate = DateTime.Now,
+
+                          };
+                          _context.ProjectTypes.Add(addProjectType);
+                          _context.SaveChanges();
+                          model.ProjectTypeExist = false;
+                      }
+                  }
+              
+                    return model;
+               }
+           
+           catch (Exception)
+           {
+               return new ProjectsModel();
+           }
+       }
+
+          public ProjectsModel AddStatus(ProjectsModel model)
+          {
+              try
+              {
+                  
+                  using (_context = new Exo_ADBEntities())
+                  {
+                      var editStatus = _context.Status.Where(m => m.StatusID == model.StatusID).FirstOrDefault();
+                      if (editStatus != null)
+                      {
+                          if (CheckIfStatusExists(model))
+                          {
+                              model.StatusExist = true;
+                              return model;
+                          }
+                          editStatus.StatusName = model.StatusName;
+
+                          _context.Status.Attach(editStatus);
+                          _context.Entry(editStatus).State = EntityState.Modified;
+                          _context.SaveChanges();
+                      }
+                      else
+                      {
+                          var addStatus = new Status()
+                          {
+                              StatusName = model.StatusName,
+                          };
+                          _context.Status.Add(addStatus);
+                          _context.SaveChanges();
+                          model.StatusExist = false;
+                      }
+                  }
+
+                  return model;
+              }
+
+              catch (Exception)
+              {
+                  return new ProjectsModel();
+              }
+          }
+
+          public ProjectsModel AddSector(ProjectsModel model,int loginId)
+          {
+              try
+              {
+                  
+                  using (_context = new Exo_ADBEntities())
+                  {
+                      var editSector = _context.Sectors.Where(m=>m.SectorID == model.SectorID).FirstOrDefault();
+                      if (editSector != null)
+                      {
+                          if (CheckIfSectorExists(model))
+                          {
+                              model.SectorExist = true;
+                              return model;
+                          }
+                          editSector.SectorName = model.SectorName;
+                          editSector.ModifiedBy = loginId;
+                          editSector.ModifiedDate = DateTime.Now;
+
+                          _context.Sectors.Attach(editSector);
+                          _context.Entry(editSector).State = EntityState.Modified;
+                          _context.SaveChanges();
+                      }
+                      else
+                      {
+                          var addSector = new Sector()
+                          {
+                              SectorName = model.SectorName,
+                              CreatedBy = loginId,
+                              CreatedDate = DateTime.Now
+                          };
+                          _context.Sectors.Add(addSector);
+                          _context.SaveChanges();
+                          model.SectorExist = false;
+                      }
+                  }
+
+                  return model;
+              }
+
+              catch (Exception)
+              {
+                  return new ProjectsModel();
+              }
+          }
+
+          public ProjectsModel AddSubSector(ProjectsModel model, int loginId)
+          {
+              try
+              {
+                 
+                  using (_context = new Exo_ADBEntities())
+                  {
+                      var editSubSector = _context.SubSectors.Where(m=>m.SubSectorID == model.SubSectorID).FirstOrDefault();
+                      if (editSubSector != null)
+                      {
+                          if (CheckIfSubSectorExists(model))
+                          {
+                              model.SubSectorExist = true;
+                              return model;
+                          }
+                          editSubSector.SubSectorName = model.SubSectorName;
+                          editSubSector.ModifiedBy = loginId;
+                          editSubSector.ModifiedDate = DateTime.Now;
+
+                          _context.SubSectors.Attach(editSubSector);
+                          _context.Entry(editSubSector).State = EntityState.Modified;
+                          _context.SaveChanges();
+
+                      }
+                      else
+                      {
+                          var addSubSector = new SubSector()
+                          {
+                              
+                              SubSectorName = model.SubSectorName,
+                              CreatedBy = loginId,
+                              CreatedDate = DateTime.Now
+                          };
+                          _context.SubSectors.Add(addSubSector);
+                          _context.SaveChanges();
+                          model.SubSectorExist = false;
+                      }
+                  }
+
+                  return model;
+              }
+
+              catch (Exception)
+              {
+                  return new ProjectsModel();
+              }
+          }
+
+        public int SaveConsultantDetail(ConsultantModel model, List<SectorsModel> SectorSubSectorDetail)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    if (model.ConsultantID > 0)
+                    {
+                        var editOfficerGeneral = _context.Consultants.Where(m => m.ConsultantID == model.ConsultantID).FirstOrDefault();
+                        if (editOfficerGeneral != null)
+                        {
+
+                            editOfficerGeneral.ConsultantName = model.ConsultantName;
+                            editOfficerGeneral.Education = model.Education;
+                            editOfficerGeneral.YearsOfExperience = model.YearsOFExperience;
+                            editOfficerGeneral.Contact = model.Contact;
+                            editOfficerGeneral.Email = model.Email;
+                            editOfficerGeneral.Mobile = model.Mobile;
+                            editOfficerGeneral.Landline = model.Landline;
+                            editOfficerGeneral.DocumentPath = model.CVpath;
+                            editOfficerGeneral.BriefOnConsultant = model.BriefOnConsultant;
+
+                            _context.Consultants.Attach(editOfficerGeneral);
+                            _context.Entry(editOfficerGeneral).State = EntityState.Modified;
+                            _context.SaveChanges();
+                        }
+                    }
+                    else
+                    {
+                        var addOfficerGeneral = new Consultant()
+                        {
+                            ConsultantName = model.ConsultantName,
+                            Education = model.Education,
+                            YearsOfExperience = model.YearsOFExperience,
+                            Contact = model.Contact,
+                            Email = model.Email,
+                            Mobile = model.Mobile,
+                            Landline = model.Landline,
+                            DocumentPath = model.CVpath,
+                            BriefOnConsultant = model.BriefOnConsultant
+                        };
+                        _context.Consultants.Add(addOfficerGeneral);
+                        _context.SaveChanges();
+                        model.ConsultantID = addOfficerGeneral.ConsultantID;
+                    }
+                    foreach (var sectorItem in SectorSubSectorDetail)
+                    {
+
+                      var sectorexists=  _context.ConsultantSubSectorDetails.Where(m=>m.ConsultantID == model.ConsultantID && m.SectorID==sectorItem.SectorID).FirstOrDefault();
+                       
+                        if(sectorexists!= null && sectorItem.isSelected ==false)
+                        {
+                            _context.Entry(sectorexists).State = EntityState.Deleted;
+                           // _context.SaveChanges();
+                        }
+                        else if (sectorexists== null && sectorItem.isSelected ==true)
+                        {
+                            //insert
+                            var addsector = new ConsultantSubSectorDetail()
+                            {
+                                ConsultantID = model.ConsultantID,
+                                SectorID = sectorItem.SectorID
+                            };
+                            _context.ConsultantSubSectorDetails.Add(addsector);
+                          _context.SaveChanges();
+                        }
+                        
+                            foreach (var subsectorItem in sectorItem.SubSectorList)
+                            {
+                                var subsectorexists = _context.ConsultantSubSectorDetails.Where(m => m.ConsultantID == model.ConsultantID && m.SubSectorID == subsectorItem.SubSectorID).FirstOrDefault();
+
+                                if (subsectorexists != null && subsectorItem.IsSelected == false)
+                                {
+                                    _context.Entry(subsectorexists).State = EntityState.Deleted;
+                                  //  _context.SaveChanges();
+                                }
+                                else if (subsectorexists == null && subsectorItem.IsSelected == true)
+                                {
+                                    var addSubSector = new ConsultantSubSectorDetail()
+                                    {
+                                        ConsultantID = model.ConsultantID,
+                                        SubSectorID = subsectorItem.SubSectorID,
+                                        SectorID = subsectorItem.SectorID
+                                    };
+                                    _context.ConsultantSubSectorDetails.Add(addSubSector);
+                                    _context.SaveChanges();
+                                }
+                            }
+                    }
+                    
+                }
+                return 1;
+            }
+            catch (Exception)
+            {
+                return 0;
+            }
+        }
+
+        public int SaveCompanyDetail(CompanyModel model, List<SectorsModel> SectorSubSectorDetailForCompany)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    if (model.CompanyID > 0)
+                    {
+                        var editCompany = _context.Companies.Where(m => m.CompanyID == model.CompanyID).FirstOrDefault();
+                        if (editCompany != null)
+                        {
+                            editCompany.CompanyName = model.CompanyName;
+                            editCompany.Address = model.Address;
+                            editCompany.Email = model.Email;
+                            editCompany.Landline = model.Landline;
+                            editCompany.Mobile = model.Mobile;
+
+                            _context.Companies.Attach(editCompany);
+                            _context.Entry(editCompany).State = EntityState.Modified;
+                            _context.SaveChanges();
+                        }
+                    }
+                    else
+                    {
+                        var addCompany = new Company()
+                        {
+                            CompanyName = model.CompanyName,
+                            Address = model.Address,
+                            Email = model.Email,
+                            Landline = model.Landline,
+                            Mobile = model.Mobile
+                        };
+                        _context.Companies.Add(addCompany);
+                        _context.SaveChanges();
+                        model.CompanyID = addCompany.CompanyID;
+                    }
+                    foreach (var sectorItem in SectorSubSectorDetailForCompany)
+                    {
+                        var sectorExists = _context.CompanySubSectorDetails.Where(m => m.CompanyID == model.CompanyID && m.SectorID == sectorItem.SectorID).FirstOrDefault();
+                        if (sectorExists != null && sectorItem.isSelected == false)
+                        {
+                            _context.Entry(sectorExists).State = EntityState.Deleted;
+                        }
+                        else if (sectorExists == null && sectorItem.isSelected == true)
+                        {
+                            var addSector = new CompanySubSectorDetail()
+                            {
+                                CompanyID = model.CompanyID,
+                                SectorID = sectorItem.SectorID
+                            };
+                            _context.CompanySubSectorDetails.Add(addSector);
+                            _context.SaveChanges();
+
+                        }
+
+                        foreach (var subsectorItem in sectorItem.SubSectorList)
+                        {
+                            var subSectorExists = _context.CompanySubSectorDetails.Where(m => m.CompanyID == model.CompanyID && m.SubSectorID == subsectorItem.SubSectorID).FirstOrDefault();
+                            if (subSectorExists != null && subsectorItem.IsSelected == false)
+                            {
+                                _context.Entry(subSectorExists).State = EntityState.Deleted;
+                            }
+                            else if (subSectorExists == null && subsectorItem.IsSelected == true)
+                            {
+                                var addSubSector = new CompanySubSectorDetail()
+                                {
+                                    CompanyID = model.CompanyID,
+                                    SubSectorID = subsectorItem.SubSectorID,
+                                    SectorID = subsectorItem.SectorID
+                                    
+                                };
+                                _context.CompanySubSectorDetails.Add(addSubSector);
+                                _context.SaveChanges();
+                            }
+                        }
+                    }
+                }
+                return 1;
+            }
+            catch (Exception)
+            {
+                
+                throw;
+            }
+        }
+        public int AddComment(ProjectsModel model)
+        {
+            try
+            {
+                using (_context = new Exo_ADBEntities())
+                {
+                    if (model.ProjectID > 0)
+                    {
+                        var addcomment = _context.Projects.Where(m => m.ProjectID == model.ProjectID).FirstOrDefault();
+                        {
+                        //var addcommentToDb = new Project()
+
+                            addcomment.Comment = model.Comment;
+                        };
+                        //_context.Projects.Add(addcomment);
+                        _context.Projects.Attach(addcomment);
+                        _context.Entry(addcomment).State = EntityState.Modified;
+                        _context.SaveChanges();
+
+                    }
+                }   
+                    return 1;
+
+            }
+            catch (Exception)
+            {
+                
+                throw;
+            }
+        }
+        public int DeleteConsultantDetail(ConsultantModel model)
+        {
+            try
+            {
+                if (model.ConsultantID > 0)
+                {
+                    using (_context = new Exo_ADBEntities())
+                    {
+                        var deleteconsultant = _context.Consultants.Where(m => m.ConsultantID == model.ConsultantID).FirstOrDefault();
+                        _context.Entry(deleteconsultant).State = EntityState.Deleted;
+                        _context.SaveChanges();
+                        
+                    }
+                }
+                return 1;
+            }
+            catch (Exception)
+            {
+                
+                throw;
+            }
+        }
+        public int DeleteCompanyDetail(CompanyModel model)
+        {
+            try
+            {
+                if (model.CompanyID > 0)
+                {
+                    using (_context = new Exo_ADBEntities())
+                    {
+                        var deletecompany = _context.Companies.Where(m => m.CompanyID == model.CompanyID).FirstOrDefault();
+                        _context.Entry(deletecompany).State = EntityState.Deleted;
+                        _context.SaveChanges();
+                    }
+                }
+                return 1;
+            }
+            catch (Exception)
+            {
+                
+                throw;
+            }
+        }
+        }
+        
+    }
+
